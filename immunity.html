@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Immunity Count Tracker</title>
+  <link
+    rel="icon"
+    type="image/svg+xml"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23c8c8cc' d='M4 8 32 0l28 8v24c0 16-11 27-28 32C15 59 4 48 4 32z'/%3E%3Cpath fill='%23199be0' d='M12 14l20-6 20 6v16c0 12-8 21-20 27C20 51 12 42 12 30z'/%3E%3C/svg%3E"
+  />
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #142033;
+      --muted: #5d6b82;
+      --line: #dbe3f0;
+      --primary: #006d77;
+      --primary-dark: #004f56;
+      --accent: #ffb703;
+      --danger: #c1121f;
+      --ok: #1f9d55;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 15% 15%, #d9f2f1 0%, transparent 36%),
+        radial-gradient(circle at 90% 10%, #ffeec3 0%, transparent 30%),
+        var(--bg);
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 8px 24px rgba(20, 32, 51, 0.06);
+    }
+
+    h1, h2 {
+      margin: 0 0 12px;
+      line-height: 1.2;
+    }
+
+    .muted {
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .people {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .person {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .person-name {
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+
+    .count-pill {
+      background: #edf8f9;
+      color: var(--primary-dark);
+      border: 1px solid #bce8eb;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-weight: 700;
+      min-width: 140px;
+      text-align: center;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button, input, select {
+      font: inherit;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      padding: 9px 12px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    button {
+      cursor: pointer;
+      border: 1px solid var(--primary);
+      background: var(--primary);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    button:hover { background: var(--primary-dark); }
+
+    button.secondary {
+      border-color: #8ca0be;
+      background: #eef3fb;
+      color: #183153;
+    }
+
+    button.danger {
+      border-color: var(--danger);
+      background: var(--danger);
+    }
+
+    .grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      align-items: end;
+    }
+
+    .status {
+      margin-top: 10px;
+      font-weight: 600;
+      min-height: 20px;
+    }
+
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--danger); }
+
+    .admin-tools {
+      display: none;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--line);
+    }
+
+    .admin-tools.visible {
+      display: block;
+    }
+
+    .admin-note {
+      font-size: 0.92rem;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .code-meta {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .admin-panel {
+      display: none;
+    }
+
+    .admin-panel.visible {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <h1>Immunity Count Tracker</h1>
+      <p class="muted">Track each person's immunity points and redeem bonus codes.</p>
+      <div id="peopleList" class="people"></div>
+    </section>
+
+    <section class="card">
+      <h2>Redeem Code</h2>
+      <p class="muted">Choose a person, enter code, then apply.</p>
+      <div class="grid" style="margin-top:12px;">
+        <div>
+          <label for="personSelect">Person</label>
+          <select id="personSelect"></select>
+        </div>
+        <div>
+          <label for="redeemCode">Code</label>
+          <input id="redeemCode" type="text" placeholder="e.g. BOOST10" />
+        </div>
+        <button id="redeemBtn">Redeem</button>
+      </div>
+      <p id="status" class="status"></p>
+    </section>
+
+    <section id="adminPanel" class="card admin-panel">
+      <h2>Admin Panel</h2>
+      <p class="muted">Enter admin password to unlock controls.</p>
+      <div class="grid" style="margin-top:12px;">
+        <div>
+          <label for="adminPassword">Password</label>
+          <input id="adminPassword" type="password" placeholder="Enter admin password" />
+        </div>
+        <button id="adminLoginBtn">Unlock Admin</button>
+      </div>
+      <p id="adminStatus" class="status"></p>
+
+      <div id="adminTools" class="admin-tools">
+        <div class="grid">
+          <div>
+            <label for="adminNewPerson">Add person</label>
+            <input id="adminNewPerson" type="text" placeholder="Enter name" />
+          </div>
+          <button id="adminAddPersonBtn" class="secondary">Add Person</button>
+        </div>
+
+        <div class="grid" style="margin-top:10px;">
+          <div>
+            <label for="adminPersonSelect">Adjust person's immunity</label>
+            <select id="adminPersonSelect"></select>
+          </div>
+          <div>
+            <label for="adminImmunityAmount">Amount</label>
+            <input id="adminImmunityAmount" type="number" min="1" value="1" />
+          </div>
+          <button id="adminAddImmunityBtn" class="secondary">Add Immunity</button>
+          <button id="adminRemoveImmunityBtn" class="danger">Remove Immunity</button>
+        </div>
+
+        <div class="grid" style="margin-top:10px;">
+          <div>
+            <label for="adminRenamePerson">Rename selected person</label>
+            <input id="adminRenamePerson" type="text" placeholder="Enter new name" />
+          </div>
+          <button id="adminRenamePersonBtn" class="secondary">Rename Person</button>
+          <button id="adminDeletePersonBtn" class="danger">Remove Person</button>
+        </div>
+
+        <div class="grid" style="margin-top:10px;">
+          <div>
+            <label for="newCodeName">New redeem code</label>
+            <input id="newCodeName" type="text" placeholder="e.g. SUPER25" />
+          </div>
+          <div>
+            <label for="newCodeValue">Code value</label>
+            <input id="newCodeValue" type="number" min="1" placeholder="e.g. 25" />
+          </div>
+          <div>
+            <label for="newCodeExpiry">Expiration date (optional)</label>
+            <input id="newCodeExpiry" type="date" />
+          </div>
+          <button id="addCodeBtn" class="secondary">Add Code</button>
+        </div>
+
+        <div class="grid" style="margin-top:10px;">
+          <div>
+            <label for="removeCodeSelect">Remove redeem code</label>
+            <select id="removeCodeSelect"></select>
+            <div id="selectedCodeMeta" class="code-meta"></div>
+          </div>
+          <button id="removeCodeBtn" class="danger">Remove Code</button>
+        </div>
+
+        <div class="grid" style="margin-top:10px;">
+          <button id="resetUsedCodesBtn" class="secondary">Reset Used Codes</button>
+          <button id="resetAllCountsBtn" class="danger">Reset All Immunity To 0</button>
+        </div>
+
+        <p class="admin-note">Admin changes are also saved in local storage.</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "immunity_tracker_state_v1";
+    const ADMIN_PASSWORD = "GoatMilk";
+    const defaultPeople = [
+      { name: "Ethan", immunity: 12 },
+      { name: "Faiz", immunity: 9 },
+      { name: "Yiyi", immunity: 15 },
+      { name: "Farhan", immunity: 15},
+      { name: "Eli", immunity: 15 }
+    ];
+
+    const defaultRedeemCodes = {
+    };
+    let redeemCodes = { ...defaultRedeemCodes };
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) {
+          return { people: [...defaultPeople], usedCodes: new Set(), redeemCodes: { ...defaultRedeemCodes } };
+        }
+
+        const parsed = JSON.parse(raw);
+        const safePeople = Array.isArray(parsed.people)
+          ? parsed.people
+              .filter((p) => p && typeof p.name === "string")
+              .map((p) => ({ name: p.name, immunity: Math.max(0, Number(p.immunity) || 0) }))
+          : [...defaultPeople];
+
+        const safeUsedCodes = Array.isArray(parsed.usedCodes)
+          ? new Set(parsed.usedCodes.map((c) => String(c).toUpperCase()))
+          : new Set();
+
+        const safeRedeemCodes =
+          parsed.redeemCodes && typeof parsed.redeemCodes === "object"
+            ? Object.fromEntries(
+                Object.entries(parsed.redeemCodes)
+                  .map(([k, v]) => {
+                    const key = String(k).toUpperCase();
+
+                    if (typeof v === "number") {
+                      return [key, { value: Math.max(1, Math.floor(v)), expiresOn: "" }];
+                    }
+
+                    if (v && typeof v === "object") {
+                      const value = Math.max(1, Math.floor(Number(v.value) || 0));
+                      const expiresOn = typeof v.expiresOn === "string" ? v.expiresOn : "";
+                      return [key, { value, expiresOn }];
+                    }
+
+                    return [key, null];
+                  })
+                  .filter(([, v]) => v && v.value > 0)
+              )
+            : { ...defaultRedeemCodes };
+
+        return {
+          people: safePeople.length ? safePeople : [...defaultPeople],
+          usedCodes: safeUsedCodes,
+          redeemCodes: Object.keys(safeRedeemCodes).length ? safeRedeemCodes : { ...defaultRedeemCodes }
+        };
+      } catch {
+        return { people: [...defaultPeople], usedCodes: new Set(), redeemCodes: { ...defaultRedeemCodes } };
+      }
+    }
+
+    function saveState() {
+      const snapshot = {
+        people,
+        usedCodes: Array.from(usedCodes),
+        redeemCodes
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+    }
+
+    const state = loadState();
+    const people = state.people;
+    const usedCodes = state.usedCodes;
+    redeemCodes = state.redeemCodes;
+
+    const peopleList = document.getElementById("peopleList");
+    const personSelect = document.getElementById("personSelect");
+    const adminPersonSelect = document.getElementById("adminPersonSelect");
+    const removeCodeSelect = document.getElementById("removeCodeSelect");
+    const selectedCodeMeta = document.getElementById("selectedCodeMeta");
+    const statusEl = document.getElementById("status");
+    const adminStatusEl = document.getElementById("adminStatus");
+    const adminTools = document.getElementById("adminTools");
+    const adminPanel = document.getElementById("adminPanel");
+    let isAdminUnlocked = false;
+
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message;
+      statusEl.className = "status " + (isError ? "err" : "ok");
+    }
+
+    function setAdminStatus(message, isError = false) {
+      adminStatusEl.textContent = message;
+      adminStatusEl.className = "status " + (isError ? "err" : "ok");
+    }
+
+    function isCodeExpired(entry) {
+      if (!entry || !entry.expiresOn) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const exp = new Date(`${entry.expiresOn}T00:00:00`);
+      if (Number.isNaN(exp.getTime())) return false;
+      return exp < today;
+    }
+
+    function formatCodeMeta(codeKey) {
+      const entry = redeemCodes[codeKey];
+      if (!entry) return "";
+
+      const expiryText = entry.expiresOn ? `Expires: ${entry.expiresOn}` : "Expires: never";
+      return `Value: ${entry.value} | ${expiryText}`;
+    }
+
+    function renderCodeSelect() {
+      removeCodeSelect.innerHTML = "";
+      const codeKeys = Object.keys(redeemCodes).sort();
+
+      codeKeys.forEach((key) => {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = key;
+        removeCodeSelect.appendChild(opt);
+      });
+
+      if (codeKeys.length) {
+        selectedCodeMeta.textContent = formatCodeMeta(removeCodeSelect.value);
+      } else {
+        selectedCodeMeta.textContent = "No redeem codes available.";
+      }
+    }
+
+    function renderPeople() {
+      peopleList.innerHTML = "";
+      personSelect.innerHTML = "";
+      adminPersonSelect.innerHTML = "";
+
+      people.forEach((person, index) => {
+        const row = document.createElement("div");
+        row.className = "person";
+
+        row.innerHTML = `
+          <div>
+            <div class="person-name">${person.name}</div>
+            <div class="count-pill">Immunity: ${person.immunity}</div>
+          </div>
+        `;
+
+        peopleList.appendChild(row);
+
+        const redeemOpt = document.createElement("option");
+        redeemOpt.value = String(index);
+        redeemOpt.textContent = person.name;
+        personSelect.appendChild(redeemOpt);
+
+        const adminOpt = document.createElement("option");
+        adminOpt.value = String(index);
+        adminOpt.textContent = person.name;
+        adminPersonSelect.appendChild(adminOpt);
+      });
+
+      renderCodeSelect();
+    }
+
+    document.getElementById("redeemBtn").addEventListener("click", () => {
+      const idx = Number(personSelect.value);
+      const code = document.getElementById("redeemCode").value.trim().toUpperCase();
+
+      if (!people[idx]) {
+        setStatus("Select a person.", true);
+        return;
+      }
+
+      if (!code) {
+        setStatus("Enter a redeem code.", true);
+        return;
+      }
+
+      if (usedCodes.has(code)) {
+        setStatus("That code was already used.", true);
+        return;
+      }
+
+      if (!(code in redeemCodes)) {
+        setStatus("Invalid code.", true);
+        return;
+      }
+
+      if (isCodeExpired(redeemCodes[code])) {
+        setStatus("This code has expired.", true);
+        return;
+      }
+
+      const add = redeemCodes[code].value;
+      people[idx].immunity += add;
+      usedCodes.add(code);
+      document.getElementById("redeemCode").value = "";
+      saveState();
+      renderPeople();
+      setStatus(`${people[idx].name} gained +${add} immunity from ${code}.`);
+    });
+
+    document.getElementById("adminLoginBtn").addEventListener("click", () => {
+      const passwordInput = document.getElementById("adminPassword");
+      if (passwordInput.value === ADMIN_PASSWORD) {
+        isAdminUnlocked = true;
+        adminTools.classList.add("visible");
+        setAdminStatus("Admin unlocked.");
+        passwordInput.value = "";
+      } else {
+        isAdminUnlocked = false;
+        adminTools.classList.remove("visible");
+        setAdminStatus("Wrong password.", true);
+      }
+    });
+
+    document.getElementById("adminAddPersonBtn").addEventListener("click", () => {
+      if (!isAdminUnlocked) {
+        setAdminStatus("Unlock admin first.", true);
+        return;
+      }
+
+      const input = document.getElementById("adminNewPerson");
+      const name = input.value.trim();
+      if (!name) {
+        setAdminStatus("Enter a name first.", true);
+        return;
+      }
+
+      people.push({ name, immunity: 0 });
+      input.value = "";
+      saveState();
+      renderPeople();
+      setAdminStatus(`${name} added.`);
+    });
+
+    document.getElementById("adminAddImmunityBtn").addEventListener("click", () => {
+      if (!isAdminUnlocked) {
+        setAdminStatus("Unlock admin first.", true);
+        return;
+      }
+
+      const idx = Number(adminPersonSelect.value);
+      const amount = Math.floor(Number(document.getElementById("adminImmunityAmount").value));
+      if (!people[idx]) {
+        setAdminStatus("Select a person.", true);
+        return;
+      }
+      if (!Number.isFinite(amount) || amount < 1) {
+        setAdminStatus("Enter a valid amount (>= 1).", true);
+        return;
+      }
+
+      people[idx].immunity += amount;
+      saveState();
+      renderPeople();
+      setAdminStatus(`Added ${amount} immunity to ${people[idx].name}.`);
+    });
+
+    document.getElementById("adminRemoveImmunityBtn").addEventListener("click", () => {
+      if (!isAdminUnlocked) {
+        setAdminStatus("Unlock admin first.", true);
+        return;
+      }
+
+      const idx = Number(adminPersonSelect.value);
+      const amount = Math.floor(Number(document.getElementById("adminImmunityAmount").value));
+      if (!people[idx]) {
+        setAdminStatus("Select a person.", true);
+        return;
+      }
+      if (!Number.isFinite(amount) || amount < 1) {
+        setAdminStatus("Enter a valid amount (>= 1).", true);
+        return;
+      }
+
+      people[idx].immunity = Math.max(0, people[idx].immunity - amount);
+      saveState();
+      renderPeople();
+      setAdminStatus(`Removed ${amount} immunity from ${people[idx].name}.`);
+    });
+
+    document.getElementById("adminRenamePersonBtn").addEventListener("click", () => {
+      if (!isAdminUnlocked) {
+        setAdminStatus("Unlock admin first.", true);
+        return;
+      }
+
+      const idx = Number(adminPersonSelect.value);
+      const renameInput = document.getElementById("adminRenamePerson");
+      const newName = renameInput.value.trim();
+      if (!people[idx]) {
+        setAdminStatus("Select a person.", true);
+        return;
+      }
+      if (!newName) {
+        setAdminStatus("Enter a new name.", true);
+        return;
+      }
+
+      const oldName = people[idx].name;
+      people[idx].name = newName;
+      renameInput.value = "";
+      saveState();
+      renderPeople();
+      setAdminStatus(`Renamed ${oldName} to ${newName}.`);
+    });
+
+    document.getElementById("adminDeletePersonBtn").addEventListener("click", () => {
+      if (!isAdminUnlocked) {
+        setAdminStatus("Unlock admin first.", true);
+        return;
+      }
+
+      const idx = Number(adminPersonSelect.value);
+      if (!people[idx]) {
+        setAdminStatus("Select a person.", true);
+        return;
+      }
+
+      const removedName = people[idx].name;
+      people.splice(idx, 1);
+      saveState();
+      renderPeople();
+      setAdminStatus(`${removedName} removed.`);
+    });
+
+    document.getElementById("addCodeBtn").addEventListener("click", () => {
+      if (!isAdminUnlocked) {
+        setAdminStatus("Unlock admin first.", true);
+        return;
+      }
+
+      const codeInput = document.getElementById("newCodeName");
+      const valueInput = document.getElementById("newCodeValue");
+      const expiryInput = document.getElementById("newCodeExpiry");
+      const code = codeInput.value.trim().toUpperCase();
+      const value = Number(valueInput.value);
+      const expiresOn = expiryInput.value.trim();
+
+      if (!code) {
+        setAdminStatus("Enter a code name.", true);
+        return;
+      }
+      if (!Number.isFinite(value) || value < 1) {
+        setAdminStatus("Enter a valid code value (>= 1).", true);
+        return;
+      }
+
+      redeemCodes[code] = {
+        value: Math.floor(value),
+        expiresOn
+      };
+      usedCodes.delete(code);
+      saveState();
+      codeInput.value = "";
+      valueInput.value = "";
+      expiryInput.value = "";
+      renderPeople();
+      setAdminStatus(`Code ${code} saved.`);
+    });
+
+    document.getElementById("removeCodeBtn").addEventListener("click", () => {
+      if (!isAdminUnlocked) {
+        setAdminStatus("Unlock admin first.", true);
+        return;
+      }
+
+      const code = removeCodeSelect.value;
+      if (!code) {
+        setAdminStatus("No code selected.", true);
+        return;
+      }
+
+      delete redeemCodes[code];
+      usedCodes.delete(code);
+      saveState();
+      renderPeople();
+      setAdminStatus(`Code ${code} removed.`);
+    });
+
+    document.getElementById("resetUsedCodesBtn").addEventListener("click", () => {
+      if (!isAdminUnlocked) {
+        setAdminStatus("Unlock admin first.", true);
+        return;
+      }
+      usedCodes.clear();
+      saveState();
+      setAdminStatus("Used-code history reset.");
+    });
+
+    document.getElementById("resetAllCountsBtn").addEventListener("click", () => {
+      if (!isAdminUnlocked) {
+        setAdminStatus("Unlock admin first.", true);
+        return;
+      }
+      people.forEach((p) => { p.immunity = 0; });
+      saveState();
+      renderPeople();
+      setAdminStatus("All immunity counts reset to 0.");
+    });
+
+    removeCodeSelect.addEventListener("change", () => {
+      selectedCodeMeta.textContent = formatCodeMeta(removeCodeSelect.value);
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.key === "~" || e.code === "Backquote") {
+        adminPanel.classList.toggle("visible");
+      }
+    });
+
+    renderPeople();
+  </script>
+</body>
+</html>
