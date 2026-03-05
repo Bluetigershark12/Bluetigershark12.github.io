@@ -286,34 +286,49 @@
     const STORAGE_KEY = "immunity_tracker_state_v1";
     const ADMIN_PASSWORD = "GoatMilk";
     const defaultPeople = [
-      { name: "Ethan", immunity: 12 },
-      { name: "Faiz", immunity: 9 },
-      { name: "Yiyi", immunity: 15 },
-      { name: "Farhan", immunity: 15},
-      { name: "Eli", immunity: 15 }
+      { id: "p_ethan", name: "Ethan", immunity: 12 },
+      { id: "p_faiz", name: "Faiz", immunity: 9 },
+      { id: "p_yiyi", name: "Yiyi", immunity: 15 },
+      { id: "p_farhan", name: "Farhan", immunity: 15},
+      { id: "p_eli", name: "Eli", immunity: 15 }
     ];
 
     const defaultRedeemCodes = {
     };
     let redeemCodes = { ...defaultRedeemCodes };
+    function makePersonId() {
+      return `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    }
 
     function loadState() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) {
-          return { people: [...defaultPeople], usedCodes: new Set(), redeemCodes: { ...defaultRedeemCodes } };
+          return { people: [...defaultPeople], usedCodesByPerson: {}, redeemCodes: { ...defaultRedeemCodes } };
         }
 
         const parsed = JSON.parse(raw);
         const safePeople = Array.isArray(parsed.people)
           ? parsed.people
               .filter((p) => p && typeof p.name === "string")
-              .map((p) => ({ name: p.name, immunity: Math.max(0, Number(p.immunity) || 0) }))
+              .map((p) => ({
+                id: typeof p.id === "string" && p.id ? p.id : makePersonId(),
+                name: p.name,
+                immunity: Math.max(0, Number(p.immunity) || 0)
+              }))
           : [...defaultPeople];
 
-        const safeUsedCodes = Array.isArray(parsed.usedCodes)
-          ? new Set(parsed.usedCodes.map((c) => String(c).toUpperCase()))
-          : new Set();
+        const safeUsedCodesByPerson =
+          parsed.usedCodesByPerson && typeof parsed.usedCodesByPerson === "object"
+            ? Object.fromEntries(
+                Object.entries(parsed.usedCodesByPerson).map(([personId, codes]) => {
+                  const safeCodes = Array.isArray(codes)
+                    ? Array.from(new Set(codes.map((c) => String(c).toUpperCase())))
+                    : [];
+                  return [String(personId), safeCodes];
+                })
+              )
+            : {};
 
         const safeRedeemCodes =
           parsed.redeemCodes && typeof parsed.redeemCodes === "object"
@@ -340,18 +355,18 @@
 
         return {
           people: safePeople.length ? safePeople : [...defaultPeople],
-          usedCodes: safeUsedCodes,
+          usedCodesByPerson: safeUsedCodesByPerson,
           redeemCodes: Object.keys(safeRedeemCodes).length ? safeRedeemCodes : { ...defaultRedeemCodes }
         };
       } catch {
-        return { people: [...defaultPeople], usedCodes: new Set(), redeemCodes: { ...defaultRedeemCodes } };
+        return { people: [...defaultPeople], usedCodesByPerson: {}, redeemCodes: { ...defaultRedeemCodes } };
       }
     }
 
     function saveState() {
       const snapshot = {
         people,
-        usedCodes: Array.from(usedCodes),
+        usedCodesByPerson,
         redeemCodes
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
@@ -359,7 +374,7 @@
 
     const state = loadState();
     const people = state.people;
-    const usedCodes = state.usedCodes;
+    const usedCodesByPerson = state.usedCodesByPerson;
     redeemCodes = state.redeemCodes;
 
     const peopleList = document.getElementById("peopleList");
@@ -401,7 +416,30 @@
       return `Value: ${entry.value} | ${expiryText}`;
     }
 
+    function hasPersonUsedCode(personId, code) {
+      const list = usedCodesByPerson[personId];
+      return Array.isArray(list) && list.includes(code);
+    }
+
+    function markPersonUsedCode(personId, code) {
+      if (!Array.isArray(usedCodesByPerson[personId])) {
+        usedCodesByPerson[personId] = [];
+      }
+      if (!usedCodesByPerson[personId].includes(code)) {
+        usedCodesByPerson[personId].push(code);
+      }
+    }
+
+    function clearCodeUsage(code) {
+      Object.keys(usedCodesByPerson).forEach((personId) => {
+        const list = usedCodesByPerson[personId];
+        if (!Array.isArray(list)) return;
+        usedCodesByPerson[personId] = list.filter((c) => c !== code);
+      });
+    }
+
     function renderCodeSelect() {
+      const previousCode = removeCodeSelect.value;
       removeCodeSelect.innerHTML = "";
       const codeKeys = Object.keys(redeemCodes).sort();
 
@@ -413,6 +451,9 @@
       });
 
       if (codeKeys.length) {
+        if (previousCode && codeKeys.includes(previousCode)) {
+          removeCodeSelect.value = previousCode;
+        }
         selectedCodeMeta.textContent = formatCodeMeta(removeCodeSelect.value);
       } else {
         selectedCodeMeta.textContent = "No redeem codes available.";
@@ -420,6 +461,8 @@
     }
 
     function renderPeople() {
+      const previousRedeemPerson = personSelect.value;
+      const previousAdminPerson = adminPersonSelect.value;
       peopleList.innerHTML = "";
       personSelect.innerHTML = "";
       adminPersonSelect.innerHTML = "";
@@ -448,6 +491,15 @@
         adminPersonSelect.appendChild(adminOpt);
       });
 
+      const redeemIdx = Number(previousRedeemPerson);
+      const adminIdx = Number(previousAdminPerson);
+      if (Number.isInteger(redeemIdx) && redeemIdx >= 0 && redeemIdx < people.length) {
+        personSelect.value = String(redeemIdx);
+      }
+      if (Number.isInteger(adminIdx) && adminIdx >= 0 && adminIdx < people.length) {
+        adminPersonSelect.value = String(adminIdx);
+      }
+
       renderCodeSelect();
     }
 
@@ -465,8 +517,9 @@
         return;
       }
 
-      if (usedCodes.has(code)) {
-        setStatus("That code was already used.", true);
+      const person = people[idx];
+      if (hasPersonUsedCode(person.id, code)) {
+        setStatus("That person already used this code.", true);
         return;
       }
 
@@ -482,7 +535,7 @@
 
       const add = redeemCodes[code].value;
       people[idx].immunity += add;
-      usedCodes.add(code);
+      markPersonUsedCode(person.id, code);
       document.getElementById("redeemCode").value = "";
       saveState();
       renderPeople();
@@ -516,7 +569,7 @@
         return;
       }
 
-      people.push({ name, immunity: 0 });
+      people.push({ id: makePersonId(), name, immunity: 0 });
       input.value = "";
       saveState();
       renderPeople();
@@ -608,7 +661,9 @@
       }
 
       const removedName = people[idx].name;
+      const removedId = people[idx].id;
       people.splice(idx, 1);
+      delete usedCodesByPerson[removedId];
       saveState();
       renderPeople();
       setAdminStatus(`${removedName} removed.`);
@@ -640,7 +695,7 @@
         value: Math.floor(value),
         expiresOn
       };
-      usedCodes.delete(code);
+      clearCodeUsage(code);
       saveState();
       codeInput.value = "";
       valueInput.value = "";
@@ -662,7 +717,7 @@
       }
 
       delete redeemCodes[code];
-      usedCodes.delete(code);
+      clearCodeUsage(code);
       saveState();
       renderPeople();
       setAdminStatus(`Code ${code} removed.`);
@@ -673,7 +728,9 @@
         setAdminStatus("Unlock admin first.", true);
         return;
       }
-      usedCodes.clear();
+      Object.keys(usedCodesByPerson).forEach((personId) => {
+        delete usedCodesByPerson[personId];
+      });
       saveState();
       setAdminStatus("Used-code history reset.");
     });
@@ -704,3 +761,4 @@
   </script>
 </body>
 </html>
+
